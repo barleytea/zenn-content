@@ -4,6 +4,7 @@ emoji: "🔍"
 type: "tech"
 topics: ["aws", "devops", "reinvent", "mcp", "agent"]
 published: false
+publication_name: "10q89s"
 ---
 
 :::message
