@@ -201,6 +201,11 @@ DevOps Agent は以下のステップで調査を進めます
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario01/root_cause.png)
 
+**要約**
+> `user-profile-service` Lambda 関数の `index.js` 4 行目で、null オブジェクトの `user` プロパティにアクセスしようとして TypeError が発生しました。
+> null チェックが欠如しているコード上の欠陥が原因です。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > 1. Lambda function null pointer error in request handler
 >
@@ -209,10 +214,7 @@ DevOps Agent は以下のステップで調査を進めます
 > The error occurred at 2025-12-16T05:45:37Z and was the sole cause of the CloudWatch alarm trigger. The function completed execution in 65ms, indicating fast failure early in the request processing lifecycle before any database operations could occur.
 >
 > The code lacks defensive programming practices such as null/undefined checks before property access.
-
-**要約**
-> `user-profile-service` Lambda 関数の `index.js` 4 行目で、null オブジェクトの `user` プロパティにアクセスしようとして TypeError が発生しました。
-> null チェックが欠如しているコード上の欠陥が原因です。
+:::
 
 #### 4.1.7 Step 6: Mitigation Plan の確認
 
@@ -220,6 +222,11 @@ DevOps Agent が提案する緩和策を以下に示します。
 
 ![Mitigation Plan](/images/aws-devops-agent-investigation/scenario01/mitigation_plan.png)
 
+**要約**
+> 即時の運用対応（ロールバック等）では解決できません。コード修正が必要です。
+> 具体的には、`index.js:4` で `user` プロパティにアクセスする前に null/undefined チェックを実装し、Lambda ハンドラの入力パラメータ全体の検証を追加します。
+
+:::details DevOps Agent の原文出力（Mitigation Plan）
 **提案された Mitigation Plan**
 
 > No immediate operational mitigation action can be identified.
@@ -240,10 +247,7 @@ DevOps Agent が提案する緩和策を以下に示します。
 > THE SYSTEM SHALL implement null and undefined validation before accessing the 'user' property in the Lambda function handler at index.js:4.
 >
 > THE SYSTEM SHALL implement comprehensive input validation for all Lambda function handler parameters.
-
-**要約**
-> 即時の運用対応（ロールバック等）では解決できません。コード修正が必要です。
-> 具体的には、`index.js:4` で `user` プロパティにアクセスする前に null/undefined チェックを実装し、Lambda ハンドラの入力パラメータ全体の検証を追加します。
+:::
 
 #### 4.1.8 結果サマリー
 
@@ -299,6 +303,12 @@ curl -X POST "${API_ENDPOINT}api/orders" \
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario02/root_cause.png)
 
+**要約**
+> `order-processing-service` Lambda 関数が 128MB のメモリ設定では不足しており、実行時に 99.2%（127MB / 128MB）を消費しました。メモリ枯渇により処理が完了できず、30 秒のタイムアウトで終了しています。リソース名から意図的な OOM テストシナリオの可能性も指摘されています。
+
+メモリの不足を指摘できていますね。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > 1. Lambda function configured with insufficient memory (128 MB) leading to memory exhaustion and timeout
 >
@@ -311,20 +321,16 @@ curl -X POST "${API_ENDPOINT}api/orders" \
 > The log group name OomLambdaLogGroup and IAM role name OomLambdaServiceRole suggest this may be a deliberate test scenario for out-of-memory conditions.
 >
 > No recent code deployments or configuration changes were detected, indicating the error was triggered by invocation of existing code that requires more than 128 MB of memory to execute successfully.
-
-**要約**
-> `order-processing-service` Lambda 関数が 128MB のメモリ設定では不足しており、実行時に 99.2%（127MB / 128MB）を消費しました。メモリ枯渇により処理が完了できず、30 秒のタイムアウトで終了しています。リソース名から意図的な OOM テストシナリオの可能性も指摘されています。
-
-メモリの不足を指摘できていますね。
+:::
 
 #### 4.2.6 Mitigation Plan
-
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario02/mitigation_plan.png)
 
 **要約**
 > `order-processing-service` Lambda 関数が **2025-12-17T01:38:00Z** にメモリ不足（128MB 中 127MB を消費、99.2%）を起こし、30 秒のタイムアウトで終了しました。メモリ割当を **128MB → 512MB（4倍）** に増加することを推奨しています。具体的な AWS CLI コマンド、検証手順、ロールバック手順も提示されました。
 
-具体的な AWS CLI コマンド、検証手順、ロールバック手順も提示されていますね。
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario02/mitigation_plan.png)
+:::
 
 #### 4.2.7 結果サマリー
 
@@ -354,6 +360,10 @@ curl -X POST "${API_ENDPOINT}api/orders" \
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario04/root_cause.png)
 
+**要約**
+> `notification-service` Lambda 関数が存在しない DB ホスト名 `invalid-db-host.local` への接続を試行し、DNS 解決エラー（ENOTFOUND）で失敗しました。VPC から到達不可能なホスト名が原因です。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > 1. Lambda function configured with invalid database hostname causing DNS resolution failure
 >
@@ -364,13 +374,9 @@ curl -X POST "${API_ENDPOINT}api/orders" \
 > This DNS resolution failure prevented the function from completing successfully, resulting in a Lambda error that triggered the CloudWatch alarm lambda-notification-service-errors at 05:32:35Z.
 >
 > The error occurs at the syscall level during DNS lookup (getaddrinfo), indicating the hostname does not exist in DNS or is unreachable from the Lambda's VPC (vpc-0b9dea157524aedae).
-
-**要約**
-> `notification-service` Lambda 関数が存在しない DB ホスト名 `invalid-db-host.local` への接続を試行し、DNS 解決エラー（ENOTFOUND）で失敗しました。VPC から到達不可能なホスト名が原因です。
+:::
 
 #### 4.3.2 Mitigation Plan
-
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario03/mitigation_plan.png)
 
 **提案された Mitigation Plan（要約）**
 
@@ -381,6 +387,10 @@ curl -X POST "${API_ENDPOINT}api/orders" \
 > **Next steps（Agent-ready spec）**:
 > 1. `DB_HOST` 環境変数からデータベース接続先を取得するよう修正します
 > 2. `DB_HOST` 環境変数が未設定の場合のエラーハンドリングを実装します
+
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario03/mitigation_plan.png)
+:::
 
 #### 4.3.3 結果サマリー
 
@@ -418,6 +428,13 @@ exports.handler = async () => {
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario04/root_cause.png)
 
+**要約**
+> `report-generator-service` Lambda 関数が過去 3 回の実行すべてで 5000ms のタイムアウトで失敗し、アプリケーションログが一切出力されていません。ハンドラの設定ミス、初期化時のブロッキング処理、または依存関係の欠如が原因と推測されます。デプロイパッケージサイズが 247 バイトと異常に小さく、不完全なデプロイの可能性も指摘されています。
+
+デプロイパッケージサイズまで見られるとは思ってなかったです。
+ただ、やはり Lambda の場合はスクリプトの内容を見てほしい旨をプロンプトに含めるほうが調査の精度を高められそうです。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > Lambda function code fails to execute due to handler misconfiguration or blocking initialization code
 >
@@ -433,16 +450,9 @@ exports.handler = async () => {
 > The deployed package size is only **247 bytes**, which is suspiciously small for a `report-generator` service, suggesting incomplete or minimal code deployment.
 >
 > Aurora RDS metrics confirm **zero database connections** were ever established, indicating the function never reaches database connection logic.
-
-**要約**
-> `report-generator-service` Lambda 関数が過去 3 回の実行すべてで 5000ms のタイムアウトで失敗し、アプリケーションログが一切出力されていません。ハンドラの設定ミス、初期化時のブロッキング処理、または依存関係の欠如が原因と推測されます。デプロイパッケージサイズが 247 バイトと異常に小さく、不完全なデプロイの可能性も指摘されています。
-
-デプロイパッケージサイズまで見られるとは思ってなかったです。
-ただ、やはり Lambda の場合はスクリプトの内容を見てほしい旨をプロンプトに含めるほうが調査の精度を高められそうです。
+:::
 
 #### 4.4.3 Mitigation Plan
-
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario04/mitigation_plan.png)
 
 **提案された Mitigation Plan（要約）**
 
@@ -455,6 +465,10 @@ exports.handler = async () => {
 > 2. 適切なタイムアウト・エラーハンドリングを持つ DB 接続処理を実装します
 > 3. ハンドラ実行ライフサイクル全体にわたるロギングを実装します
 > 4. レポート生成処理に十分な時間を確保できるよう Lambda タイムアウト設定を延長します
+
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario04/mitigation_plan.png)
+:::
 
 #### 4.4.4 結果サマリー
 
@@ -506,6 +520,10 @@ func memoryLeakHandler(w http.ResponseWriter, r *http.Request) {
 
 #### 5.1.2 Root Cause
 
+**要約**
+> `api-gateway-service` の ECS Fargate タスクが **2025-12-18T01:30:08Z** のデプロイ以降、8〜15 分で 512MB メモリを使い果たし Exit Code 137（OOM Kill）で終了しています。メモリ使用率が起動時から段階的に上昇（69〜91%）する一貫したパターンが確認されました。CPU 使用率は低く（0.3〜5%）、コードレベルのメモリリークが原因と判断されました。繰り返しのコンテナ再起動により ALB で 502 エラーが発生しています。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > Memory leak in api-gateway-service application causing OOM container terminations
 >
@@ -526,15 +544,9 @@ func memoryLeakHandler(w http.ResponseWriter, r *http.Request) {
 > The ECR container image was pushed at **01:01:49**, confirming a **new deployment** that introduced the memory leak. No metrics exist before the deployment, confirming this issue did not occur prior to the new version.
 >
 > These repeated OOM container terminations cause cascading **502 errors** at the Application Load Balancer (ALB) layer, as backend connections cannot be established during container restart transitions.
-
-**要約**
-> `api-gateway-service` の ECS Fargate タスクが **2025-12-18T01:30:08Z** のデプロイ以降、8〜15 分で 512MB メモリを使い果たし Exit Code 137（OOM Kill）で終了しています。メモリ使用率が起動時から段階的に上昇（69〜91%）する一貫したパターンが確認されました。CPU 使用率は低く（0.3〜5%）、コードレベルのメモリリークが原因と判断されました。繰り返しのコンテナ再起動により ALB で 502 エラーが発生しています。
+:::
 
 #### 5.1.3 Mitigation Plan
-
-:::details Mitigation Plan
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario05/mitigation_plan.png)
-:::
 
 **提案された Mitigation Plan（要約）**
 
@@ -545,6 +557,10 @@ func memoryLeakHandler(w http.ResponseWriter, r *http.Request) {
 > これにより OOM 発生までの時間が約 8-15 分から約 15-30 分に延長され、再起動頻度と ALB での 502 エラーを軽減できます。
 >
 > **この緩和策はメモリリークを解決するものではなく、一時的な措置としてのみ扱うべきです。**
+
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario05/mitigation_plan.png)
+:::
 
 
 #### 5.1.4 結果サマリー
@@ -624,6 +640,10 @@ func cpuSpikeHandler(w http.ResponseWriter, r *http.Request) {
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario06/root_cause.png)
 
+**要約**
+> `api-gateway-service` が起動後約 17 秒で「Server starting on port 8080」ログを出力した直後、無限ループまたはブロッキング処理に入り CPU を 99.9%（255.83 / 256 units）消費し続けています。2025年12月15日以降の全 7 タスクで同じパターンが発生しています。アプリケーションは初期化を完了せず、ヘルスチェックにも応答せず、エラーログも出力されていません。無限ループ、タイムアウトなしのブロッキング処理、CPU バウンドな計算、または終了条件のない再帰呼び出しが原因と推測されます。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > Application code contains infinite loop or blocking operation in startup sequence causing 99.9% CPU consumption
 >
@@ -642,15 +662,9 @@ func cpuSpikeHandler(w http.ResponseWriter, r *http.Request) {
 > 2. A **blocking synchronous operation without timeout**
 > 3. A **CPU-bound computation that never completes**
 > 4. A **recursive function call without a proper termination condition**
-
-**要約**
-> `api-gateway-service` が起動後約 17 秒で「Server starting on port 8080」ログを出力した直後、無限ループまたはブロッキング処理に入り CPU を 99.9%（255.83 / 256 units）消費し続けています。2025年12月15日以降の全 7 タスクで同じパターンが発生しています。アプリケーションは初期化を完了せず、ヘルスチェックにも応答せず、エラーログも出力されていません。無限ループ、タイムアウトなしのブロッキング処理、CPU バウンドな計算、または終了条件のない再帰呼び出しが原因と推測されます。
+:::
 
 #### 5.2.3 Mitigation Plan
-
-:::details Mitigation Plan
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario06/mitigation_plan.png)
-:::
 
 **提案された Mitigation Plan（要約）**
 
@@ -658,9 +672,11 @@ func cpuSpikeHandler(w http.ResponseWriter, r *http.Request) {
 >
 > 2025年12月15日頃に導入されたコード欠陥により、全てのコンテナタスクが `Server starting on port 8080` ログ出力直後に**無限ループまたはブロッキング処理**に入り、**CPU 使用率 99.9%** が 10 分以上継続しています。
 >
-> ECR イメージ履歴から **2025年12月12日** の正常イメージが確認できたため、そのイメージへのロールバックを推奨しています。
+> ECR イメージ履歴から **2025年12月12日** の正常イメージが確認できたため、そのイメージへのロールバックを推奨しています。具体的なロールバック手順（AWS CLI コマンド）も提示されました。
 
-具体的なロールバック手順（AWS CLI コマンド）も提示されました。
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario06/mitigation_plan.png)
+:::
 
 #### 5.2.5 結果サマリー
 
@@ -707,6 +723,10 @@ func panicHandler(w http.ResponseWriter, r *http.Request) {
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario07/root_cause.png)
 
+**要約**
+> `api-gateway-service` が `/app/main.go:315` の意図的な panic テストコードによりクラッシュしました。コンテナは exit code 2 で終了し、2 つのタスク（2025-12-19T00:16:59Z と 00:13:28Z）がクラッシュしました。CPU 使用率（<1%）、メモリ使用率（<0.4%）が低く、インフラの問題ではなくコードレベルの問題と判断されています。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > Intentional panic test code in application causing ECS task crashes
 >
@@ -724,15 +744,9 @@ func panicHandler(w http.ResponseWriter, r *http.Request) {
 > - CPU utilization remained extremely low (**<1%**)
 > - Memory usage remained low (**<0.4%**)
 > - No infrastructure changes occurred
-
-**要約**
-> `api-gateway-service` が `/app/main.go:315` の意図的な panic テストコードによりクラッシュしました。コンテナは exit code 2 で終了し、2 つのタスク（2025-12-19T00:16:59Z と 00:13:28Z）がクラッシュしました。CPU 使用率（<1%）、メモリ使用率（<0.4%）が低く、インフラの問題ではなくコードレベルの問題と判断されています。
+:::
 
 #### 5.3.3 Mitigation Plan
-
-:::details Mitigation Plan
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario07/mitigation_plan.png)
-:::
 
 **提案された Mitigation Plan（要約）**
 
@@ -740,9 +754,11 @@ func panicHandler(w http.ResponseWriter, r *http.Request) {
 >
 > `api-gateway-service` の ECS タスクが `/app/main.go:315` の**意図的な panic テストコード**によりクラッシュしています。コンテナは **exit code 2** で終了し、タスクの再起動が繰り返されています。
 >
-> panic テストコードを含まない**以前の安定したコンテナイメージへのロールバック**を推奨しています。
+> panic テストコードを含まない**以前の安定したコンテナイメージへのロールバック**を推奨しています。具体的なロールバック手順と、ロールバック後の検証コマンドも提示されました。
 
-具体的なロールバック手順と、ロールバック後の検証コマンドも提示されました。
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario07/mitigation_plan.png)
+:::
 
 #### 5.3.4 結果サマリー
 
@@ -800,6 +816,10 @@ func dbErrorHandler(w http.ResponseWriter, r *http.Request) {
 
 ![Root Cause](/images/aws-devops-agent-investigation/scenario08/root_cause.png)
 
+**要約**
+> ECS タスク定義に DB 認証情報（ユーザー名とパスワード）が含まれておらず、Aurora PostgreSQL に接続できません。Aurora メトリクスでは 17 分以上タスクが実行されているにもかかわらず接続数ゼロ、アプリケーションログにも DB 接続試行やエラーが一切出力されていない、ECS から Aurora へのネットワークトラフィックも最小限（~0.47 bytes/sec）という状況から判断されました。CloudFormation で Secrets Manager に認証情報は作成されていますが、タスク定義でコンテナ環境に注入されていないことが原因です。
+
+:::details DevOps Agent の原文出力（Root Cause）
 > **Root cause**
 > ECS task definition missing database credentials (username and password)
 >
@@ -812,15 +832,9 @@ func dbErrorHandler(w http.ResponseWriter, r *http.Request) {
 > 4. The ECS task **passes ALB health checks** and reports **HEALTHY**, because the health check endpoint does not validate database connectivity.
 >
 > CloudFormation created database credentials in **AWS Secrets Manager** at **2025-12-19T01:52:11 UTC**. However, the ECS task definition was **not configured to inject these secrets** into the container environment.
-
-**要約**
-> ECS タスク定義に DB 認証情報（ユーザー名とパスワード）が含まれておらず、Aurora PostgreSQL に接続できません。Aurora メトリクスでは 17 分以上タスクが実行されているにもかかわらず接続数ゼロ、アプリケーションログにも DB 接続試行やエラーが一切出力されていない、ECS から Aurora へのネットワークトラフィックも最小限（~0.47 bytes/sec）という状況から判断されました。CloudFormation で Secrets Manager に認証情報は作成されていますが、タスク定義でコンテナ環境に注入されていないことが原因です。
+:::
 
 #### 5.4.3 Mitigation Plan
-
-:::details Mitigation Plan
-![Mitigation Plan](/images/aws-devops-agent-investigation/scenario08/mitigation_plan.png)
-:::
 
 **提案された Mitigation Plan（要約）**
 
@@ -832,8 +846,12 @@ func dbErrorHandler(w http.ResponseWriter, r *http.Request) {
 > 1. `DB_USER` と `DB_PASSWORD` を Secrets Manager から注入するようタスク定義を更新します
 > 2. ECS タスク実行ロールに Secrets Manager へのアクセス権限を付与します
 > 3. サービスを再デプロイします
+>
+> 具体的な AWS CLI コマンド、IAM ポリシー、ロールバック手順まで提示されました。
 
-具体的な AWS CLI コマンド、IAM ポリシー、ロールバック手順まで提示されました。
+:::details Mitigation Plan のスクリーンショット
+![Mitigation Plan](/images/aws-devops-agent-investigation/scenario08/mitigation_plan.png)
+:::
 
 #### 5.4.4 結果サマリー
 
