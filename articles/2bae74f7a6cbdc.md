@@ -3,7 +3,8 @@ title: "AWS DevOps Agent はどこまで障害の原因を特定できるのか�
 emoji: "🔍"
 type: "tech"
 topics: ["aws", "devops", "reinvent", "mcp", "agent"]
-published: false
+published: true
+published_at: 2026-01-09 08:00
 publication_name: "10q89s"
 ---
 
